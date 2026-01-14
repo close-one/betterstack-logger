@@ -4,7 +4,7 @@ Donate link: https://github.com/sponsors/millertchris
 Plugin Name: BetterStack Logger
 Plugin URI:  https://prolificdigital.com
 Tags: betterstack, logger, logging, debug, monitor
-Stable tag: 1.0.0
+Stable tag: 2.0.0
 Requires at least: 6.0
 Requires PHP: 8.0
 Tested up to: 6.6
