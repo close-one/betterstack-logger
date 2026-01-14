@@ -17,11 +17,11 @@ Text Domain: betterstack-logger
 
 */
 
-if (!defined('WPINC')) {
-  die;
+if (!defined("WPINC")) {
+  die();
 }
 
-require_once plugin_dir_path(__FILE__) . 'includes/BetterStackLogger.php';
+require_once plugin_dir_path(__FILE__) . "includes/BetterStackLogger.php";
 
 // Create a global instance of the BetterStackLogger class
 global $betterstack_logger;
@@ -35,12 +35,15 @@ $betterstack_logger = new BetterStackLogger();
  *
  * @param string $message The message to log.
  */
-if (!function_exists('better_error_log')) {
-  function better_error_log($message) {
+if (!function_exists("better_error_log")) {
+  function better_error_log($message)
+  {
     global $betterstack_logger;
 
     if ($betterstack_logger instanceof BetterStackLogger) {
-      $betterstack_logger->log_error($message);
+      // Sanitize input - strip HTML tags and ensure it's a string
+      $sanitized_message = wp_strip_all_tags((string) $message);
+      $betterstack_logger->log_error($sanitized_message);
     }
   }
 }
@@ -53,12 +56,15 @@ if (!function_exists('better_error_log')) {
  *
  * @param string $message The message to log.
  */
-if (!function_exists('b_log')) {
-  function b_log($message) {
+if (!function_exists("b_log")) {
+  function b_log($message)
+  {
     global $betterstack_logger;
 
     if ($betterstack_logger instanceof BetterStackLogger) {
-      $betterstack_logger->log_error($message);
+      // Sanitize input - strip HTML tags and ensure it's a string
+      $sanitized_message = wp_strip_all_tags((string) $message);
+      $betterstack_logger->log_error($sanitized_message);
     }
   }
 }

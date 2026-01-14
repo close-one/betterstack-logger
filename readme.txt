@@ -15,6 +15,12 @@ License URI: https://www.gnu.org/licenses/gpl-2.0.html
 Text Domain: betterstack-logger
 Seamlessly integrate with BetterStack to log messages directly from your WordPress site.
 
+== MODIFIED VERSION NOTICE ==
+
+This is a modified version of the original BetterStack Logger plugin. Security improvements and bug fixes have been applied.
+
+Original Source: https://github.com/prolific-digital/betterstack-logger
+
 == Description ==
 
 BetterStack Logger is a powerful WordPress plugin that allows you to seamlessly integrate BetterStack with your WordPress site. Enhance your logging capabilities by sending error messages, post changes, user actions, and more directly to BetterStack. With easy configuration and flexible logging functions, this plugin is an essential tool for developers and site administrators looking to keep track of their site's activities.
