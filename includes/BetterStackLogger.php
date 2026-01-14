@@ -48,6 +48,9 @@ class BetterStackLogger
     add_action("admin_init", [$this, "settings_init"]);
     add_action("wp_die_handler", [$this, "betterstack_wp_die_handler"]);
 
+    // Set up PHP error handler if enabled
+    $this->setup_error_handler();
+
     if (get_option("betterstack_event_logging_enabled") === "yes") {
       // User-related events
       add_action("wp_login", [$this, "log_event"], 10, 2);
@@ -71,6 +74,159 @@ class BetterStackLogger
       // // // General settings updates
       // add_action('updated_option', [$this, 'log_event'], 10, 3);
     }
+  }
+
+  /**
+   * Sets up the PHP error handler to capture errors, warnings, and notices.
+   */
+  private function setup_error_handler()
+  {
+    $error_level = get_option("betterstack_php_error_level", "errors_warnings");
+
+    if ($error_level === "disabled") {
+      return;
+    }
+
+    set_error_handler([$this, "handle_php_error"]);
+    register_shutdown_function([$this, "handle_fatal_error"]);
+  }
+
+  /**
+   * Handles PHP errors and sends them to BetterStack.
+   *
+   * @param int $errno The error level.
+   * @param string $errstr The error message.
+   * @param string $errfile The filename where the error occurred.
+   * @param int $errline The line number where the error occurred.
+   * @return bool False to allow normal error handling to continue.
+   */
+  public function handle_php_error($errno, $errstr, $errfile, $errline)
+  {
+    // Don't log if error reporting is turned off for this error type
+    if (!(error_reporting() & $errno)) {
+      return false;
+    }
+
+    $error_level = get_option("betterstack_php_error_level", "errors_warnings");
+    $error_type = $this->get_error_type_name($errno);
+    $should_log = false;
+
+    switch ($error_level) {
+      case "all":
+        $should_log = true;
+        break;
+      case "errors_warnings_notices":
+        $should_log = in_array($errno, [
+          E_ERROR,
+          E_WARNING,
+          E_PARSE,
+          E_NOTICE,
+          E_CORE_ERROR,
+          E_CORE_WARNING,
+          E_COMPILE_ERROR,
+          E_COMPILE_WARNING,
+          E_USER_ERROR,
+          E_USER_WARNING,
+          E_USER_NOTICE,
+          E_RECOVERABLE_ERROR,
+          E_DEPRECATED,
+          E_USER_DEPRECATED,
+        ]);
+        break;
+      case "errors_warnings":
+        $should_log = in_array($errno, [
+          E_ERROR,
+          E_WARNING,
+          E_PARSE,
+          E_CORE_ERROR,
+          E_CORE_WARNING,
+          E_COMPILE_ERROR,
+          E_COMPILE_WARNING,
+          E_USER_ERROR,
+          E_USER_WARNING,
+          E_RECOVERABLE_ERROR,
+        ]);
+        break;
+      case "errors_only":
+        $should_log = in_array($errno, [
+          E_ERROR,
+          E_PARSE,
+          E_CORE_ERROR,
+          E_COMPILE_ERROR,
+          E_USER_ERROR,
+          E_RECOVERABLE_ERROR,
+        ]);
+        break;
+    }
+
+    if ($should_log) {
+      $message = sprintf(
+        "PHP %s: %s in %s on line %d",
+        $error_type,
+        $errstr,
+        $errfile,
+        $errline,
+      );
+      $this->log_error($message);
+    }
+
+    // Return false to allow normal error handling to continue
+    return false;
+  }
+
+  /**
+   * Handles fatal errors on shutdown.
+   */
+  public function handle_fatal_error()
+  {
+    $error = error_get_last();
+    if (
+      $error !== null &&
+      in_array($error["type"], [
+        E_ERROR,
+        E_PARSE,
+        E_CORE_ERROR,
+        E_COMPILE_ERROR,
+      ])
+    ) {
+      $error_type = $this->get_error_type_name($error["type"]);
+      $message = sprintf(
+        "PHP %s: %s in %s on line %d",
+        $error_type,
+        $error["message"],
+        $error["file"],
+        $error["line"],
+      );
+      $this->log_error($message);
+    }
+  }
+
+  /**
+   * Gets a human-readable name for a PHP error type.
+   *
+   * @param int $errno The error level constant.
+   * @return string The error type name.
+   */
+  private function get_error_type_name($errno)
+  {
+    $types = [
+      E_ERROR => "Fatal Error",
+      E_WARNING => "Warning",
+      E_PARSE => "Parse Error",
+      E_NOTICE => "Notice",
+      E_CORE_ERROR => "Core Error",
+      E_CORE_WARNING => "Core Warning",
+      E_COMPILE_ERROR => "Compile Error",
+      E_COMPILE_WARNING => "Compile Warning",
+      E_USER_ERROR => "User Error",
+      E_USER_WARNING => "User Warning",
+      E_USER_NOTICE => "User Notice",
+      E_STRICT => "Strict",
+      E_RECOVERABLE_ERROR => "Recoverable Error",
+      E_DEPRECATED => "Deprecated",
+      E_USER_DEPRECATED => "User Deprecated",
+    ];
+    return $types[$errno] ?? "Unknown Error ($errno)";
   }
 
   /**
@@ -456,6 +612,15 @@ class BetterStackLogger
       "betterstack_event_logging_enabled",
     );
 
+    register_setting(
+      "betterstack_logger_options_group",
+      "betterstack_php_error_level",
+      [
+        "sanitize_callback" => "sanitize_text_field",
+        "default" => "errors_warnings",
+      ],
+    );
+
     add_settings_section(
       "betterstack_logger_settings_section",
       "API Settings",
@@ -616,6 +781,62 @@ class BetterStackLogger
           checked($event_logging_enabled, "yes", false) .
           "> Enable logging of all user actions on the site";
         echo '<p class="description">This will log user actions and post changes. <a href="https://prolificdigital.notion.site/BetterStack-Logger-c0cc4526efd049c09b77965bf3ecc28e" target="_blank">Learn more</a></p>';
+      },
+      "betterstack-logger",
+      "betterstack_logger_settings_section",
+    );
+
+    add_settings_field(
+      "betterstack_php_error_level",
+      "PHP Error Logging",
+      function () {
+        $error_level = get_option(
+          "betterstack_php_error_level",
+          "errors_warnings",
+        ); ?>
+        <fieldset>
+          <label>
+            <input type="radio" name="betterstack_php_error_level" value="disabled" <?php checked(
+              $error_level,
+              "disabled",
+            ); ?>>
+            Disabled
+          </label>
+          <br>
+          <label>
+            <input type="radio" name="betterstack_php_error_level" value="errors_only" <?php checked(
+              $error_level,
+              "errors_only",
+            ); ?>>
+            Errors only (Fatal, Parse, Compile errors)
+          </label>
+          <br>
+          <label>
+            <input type="radio" name="betterstack_php_error_level" value="errors_warnings" <?php checked(
+              $error_level,
+              "errors_warnings",
+            ); ?>>
+            Errors &amp; Warnings (Recommended)
+          </label>
+          <br>
+          <label>
+            <input type="radio" name="betterstack_php_error_level" value="errors_warnings_notices" <?php checked(
+              $error_level,
+              "errors_warnings_notices",
+            ); ?>>
+            Errors, Warnings &amp; Notices
+          </label>
+          <br>
+          <label>
+            <input type="radio" name="betterstack_php_error_level" value="all" <?php checked(
+              $error_level,
+              "all",
+            ); ?>>
+            All PHP errors (including Deprecated, Strict)
+          </label>
+        </fieldset>
+        <p class="description">Captures PHP errors and sends them to BetterStack. This includes errors from plugins, themes, and WordPress core.</p>
+        <?php
       },
       "betterstack-logger",
       "betterstack_logger_settings_section",
