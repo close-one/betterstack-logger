@@ -247,6 +247,14 @@ class BetterStackLogger
     $url = $this->host_url;
     $date = gmdate("Y-m-d H:i:s") . " UTC";
 
+    // Prepend site identifier if enabled
+    $site_prefix = defined("BETTERSTACK_SITE_PREFIX")
+      ? BETTERSTACK_SITE_PREFIX
+      : get_option("betterstack_site_prefix", "");
+    if (!empty($site_prefix)) {
+      $message = "[" . $site_prefix . "] " . $message;
+    }
+
     $data = [
       "dt" => $date,
       "message" => $message,
@@ -404,6 +412,14 @@ class BetterStackLogger
     );
     register_setting(
       "betterstack_logger_options_group",
+      "betterstack_site_prefix",
+      [
+        "sanitize_callback" => "sanitize_text_field",
+        "default" => "",
+      ],
+    );
+    register_setting(
+      "betterstack_logger_options_group",
       "betterstack_error_logging_enabled",
     );
 
@@ -416,7 +432,7 @@ class BetterStackLogger
       "betterstack_logger_settings_section",
       "API Settings",
       function () {
-        echo '<p class="description">Enter your BetterStack API key and configure logging settings below. You can optionally define the API key and host URL in the wp-config.php file using <code>BETTERSTACK_API_KEY</code> and <code>BETTERSTACK_HOST_URL</code>.</p>';
+        echo '<p class="description">Enter your BetterStack API key and configure logging settings below. You can optionally define settings in wp-config.php using <code>BETTERSTACK_API_KEY</code>, <code>BETTERSTACK_HOST_URL</code>, and <code>BETTERSTACK_SITE_PREFIX</code>.</p>';
         echo '<p class="description">For more information, visit our <a href="https://prolificdigital.notion.site/BetterStack-Logger-c0cc4526efd049c09b77965bf3ecc28e" target="_blank">support article</a>.</p>';
       },
       "betterstack-logger",
@@ -464,6 +480,30 @@ class BetterStackLogger
             esc_attr($host_url) .
             '" size="50" placeholder="https://in.logs.betterstack.com">';
           echo '<p class="description">The BetterStack ingesting endpoint URL. Default: <code>https://in.logs.betterstack.com</code></p>';
+        }
+      },
+      "betterstack-logger",
+      "betterstack_logger_settings_section",
+    );
+
+    add_settings_field(
+      "betterstack_site_prefix",
+      "Site Prefix",
+      function () {
+        if (defined("BETTERSTACK_SITE_PREFIX")) {
+          echo '<input type="text" value="' .
+            esc_attr(BETTERSTACK_SITE_PREFIX) .
+            '" size="50" readonly disabled>';
+          echo '<p class="description">This site prefix is defined in the wp-config.php file and cannot be changed here.</p>';
+        } else {
+          $site_prefix = get_option("betterstack_site_prefix", "");
+          $placeholder = wp_parse_url(home_url(), PHP_URL_HOST);
+          echo '<input type="text" name="betterstack_site_prefix" value="' .
+            esc_attr($site_prefix) .
+            '" size="50" placeholder="' .
+            esc_attr($placeholder) .
+            '">';
+          echo '<p class="description">Optional prefix prepended to all log messages (e.g., <code>production</code>, <code>staging</code>, or your domain). Helps distinguish logs from different environments.</p>';
         }
       },
       "betterstack-logger",
