@@ -24,6 +24,13 @@ class BetterStackLogger
   private $api_key;
 
   /**
+   * The BetterStack ingesting host URL.
+   *
+   * @var string
+   */
+  private $host_url;
+
+  /**
    * Constructor for the BetterStackLogger class.
    *
    * Initializes the API key and hooks into various WordPress actions
@@ -34,6 +41,9 @@ class BetterStackLogger
     $this->api_key = defined("BETTERSTACK_API_KEY")
       ? BETTERSTACK_API_KEY
       : get_option("betterstack_api_key");
+    $this->host_url = defined("BETTERSTACK_HOST_URL")
+      ? BETTERSTACK_HOST_URL
+      : get_option("betterstack_host_url", "https://in.logs.betterstack.com");
     add_action("admin_menu", [$this, "betterstack_logger_menu"]);
     add_action("admin_init", [$this, "settings_init"]);
     add_action("wp_die_handler", [$this, "betterstack_wp_die_handler"]);
@@ -234,7 +244,7 @@ class BetterStackLogger
       return "API key is not set.";
     }
 
-    $url = "https://in.logs.betterstack.com";
+    $url = $this->host_url;
     $date = gmdate("Y-m-d H:i:s") . " UTC";
 
     $data = [
@@ -386,6 +396,14 @@ class BetterStackLogger
     register_setting("betterstack_logger_options_group", "betterstack_api_key");
     register_setting(
       "betterstack_logger_options_group",
+      "betterstack_host_url",
+      [
+        "sanitize_callback" => "esc_url_raw",
+        "default" => "https://in.logs.betterstack.com",
+      ],
+    );
+    register_setting(
+      "betterstack_logger_options_group",
       "betterstack_error_logging_enabled",
     );
 
@@ -398,7 +416,7 @@ class BetterStackLogger
       "betterstack_logger_settings_section",
       "API Settings",
       function () {
-        echo '<p class="description">Enter your BetterStack API key and configure logging settings below. You can optionally define the API key in the wp-config.php file using <code>BETTERSTACK_API_KEY</code>.</p>';
+        echo '<p class="description">Enter your BetterStack API key and configure logging settings below. You can optionally define the API key and host URL in the wp-config.php file using <code>BETTERSTACK_API_KEY</code> and <code>BETTERSTACK_HOST_URL</code>.</p>';
         echo '<p class="description">For more information, visit our <a href="https://prolificdigital.notion.site/BetterStack-Logger-c0cc4526efd049c09b77965bf3ecc28e" target="_blank">support article</a>.</p>';
       },
       "betterstack-logger",
@@ -422,6 +440,30 @@ class BetterStackLogger
           echo '<input type="password" name="betterstack_api_key" value="' .
             esc_attr($api_key) .
             '" size="50" autocomplete="off">';
+        }
+      },
+      "betterstack-logger",
+      "betterstack_logger_settings_section",
+    );
+
+    add_settings_field(
+      "betterstack_host_url",
+      "Ingesting Host URL",
+      function () {
+        if (defined("BETTERSTACK_HOST_URL")) {
+          echo '<input type="text" value="' .
+            esc_attr(BETTERSTACK_HOST_URL) .
+            '" size="50" readonly disabled>';
+          echo '<p class="description">This host URL is defined in the wp-config.php file and cannot be changed here.</p>';
+        } else {
+          $host_url = get_option(
+            "betterstack_host_url",
+            "https://in.logs.betterstack.com",
+          );
+          echo '<input type="url" name="betterstack_host_url" value="' .
+            esc_attr($host_url) .
+            '" size="50" placeholder="https://in.logs.betterstack.com">';
+          echo '<p class="description">The BetterStack ingesting endpoint URL. Default: <code>https://in.logs.betterstack.com</code></p>';
         }
       },
       "betterstack-logger",
