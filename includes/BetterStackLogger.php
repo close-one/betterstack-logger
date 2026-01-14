@@ -233,6 +233,36 @@ class BetterStackLogger
   }
 
   /**
+   * Gets the site prefix for log messages.
+   *
+   * Priority:
+   * 1. BETTERSTACK_SITE_PREFIX constant (manual override)
+   * 2. betterstack_site_prefix option if set to non-empty value
+   * 3. Auto-derived from site URL (default behavior)
+   *
+   * @return string The site prefix, or empty string if disabled.
+   */
+  private function get_site_prefix()
+  {
+    // Manual override via constant
+    if (defined("BETTERSTACK_SITE_PREFIX")) {
+      return BETTERSTACK_SITE_PREFIX;
+    }
+
+    // Check option - special value "disabled" turns off prefix entirely
+    $option = get_option("betterstack_site_prefix", "auto");
+    if ($option === "disabled") {
+      return "";
+    }
+    if ($option !== "auto" && !empty($option)) {
+      return $option;
+    }
+
+    // Auto-derive from site URL
+    return wp_parse_url(home_url(), PHP_URL_HOST);
+  }
+
+  /**
    * Creates a log entry and sends it to BetterStack.
    *
    * @param string $message The message to log.
@@ -247,10 +277,8 @@ class BetterStackLogger
     $url = $this->host_url;
     $date = gmdate("Y-m-d H:i:s") . " UTC";
 
-    // Prepend site identifier if enabled
-    $site_prefix = defined("BETTERSTACK_SITE_PREFIX")
-      ? BETTERSTACK_SITE_PREFIX
-      : get_option("betterstack_site_prefix", "");
+    // Prepend site identifier
+    $site_prefix = $this->get_site_prefix();
     if (!empty($site_prefix)) {
       $message = "[" . $site_prefix . "] " . $message;
     }
@@ -415,7 +443,7 @@ class BetterStackLogger
       "betterstack_site_prefix",
       [
         "sanitize_callback" => "sanitize_text_field",
-        "default" => "",
+        "default" => "auto",
       ],
     );
     register_setting(
@@ -496,14 +524,64 @@ class BetterStackLogger
             '" size="50" readonly disabled>';
           echo '<p class="description">This site prefix is defined in the wp-config.php file and cannot be changed here.</p>';
         } else {
-          $site_prefix = get_option("betterstack_site_prefix", "");
-          $placeholder = wp_parse_url(home_url(), PHP_URL_HOST);
-          echo '<input type="text" name="betterstack_site_prefix" value="' .
-            esc_attr($site_prefix) .
-            '" size="50" placeholder="' .
-            esc_attr($placeholder) .
-            '">';
-          echo '<p class="description">Optional prefix prepended to all log messages (e.g., <code>production</code>, <code>staging</code>, or your domain). Helps distinguish logs from different environments.</p>';
+
+          $site_prefix = get_option("betterstack_site_prefix", "auto");
+          $current_host = wp_parse_url(home_url(), PHP_URL_HOST);
+          $is_auto = $site_prefix === "auto";
+          $is_disabled = $site_prefix === "disabled";
+          $is_custom = !$is_auto && !$is_disabled;
+          ?>
+          <fieldset>
+            <label>
+              <input type="radio" name="betterstack_site_prefix" value="auto" <?php checked(
+                $is_auto,
+              ); ?>>
+              Auto-detect from URL <code>(<?php echo esc_html(
+                $current_host,
+              ); ?>)</code>
+            </label>
+            <br>
+            <label>
+              <input type="radio" name="betterstack_site_prefix" value="disabled" <?php checked(
+                $is_disabled,
+              ); ?>>
+              Disabled (no prefix)
+            </label>
+            <br>
+            <label>
+              <input type="radio" name="betterstack_site_prefix" value="custom" <?php checked(
+                $is_custom,
+              ); ?>>
+              Custom:
+              <input type="text" id="betterstack_site_prefix_custom" value="<?php echo esc_attr(
+                $is_custom ? $site_prefix : "",
+              ); ?>" size="30" placeholder="my-prefix">
+            </label>
+          </fieldset>
+          <p class="description">Prefix prepended to all log messages. Auto-detect uses the site URL, which automatically changes when the site is duplicated to staging/dev.</p>
+          <script>
+          (function() {
+            const customInput = document.getElementById('betterstack_site_prefix_custom');
+            const radios = document.querySelectorAll('input[name="betterstack_site_prefix"]');
+            radios.forEach(radio => {
+              radio.addEventListener('change', function() {
+                if (this.value === 'custom') {
+                  customInput.focus();
+                }
+              });
+            });
+            customInput.addEventListener('focus', function() {
+              document.querySelector('input[name="betterstack_site_prefix"][value="custom"]').checked = true;
+            });
+            customInput.form.addEventListener('submit', function() {
+              const customRadio = document.querySelector('input[name="betterstack_site_prefix"][value="custom"]');
+              if (customRadio.checked && customInput.value.trim()) {
+                customRadio.value = customInput.value.trim();
+              }
+            });
+          })();
+          </script>
+          <?php
         }
       },
       "betterstack-logger",
